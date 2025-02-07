@@ -136,6 +136,11 @@ defmodule Kadabra.Connection do
     {:stop, :shutdown, state}
   end
 
+  def handle_info({:closed, _pid, {:ssl_error, reason}}, state) do
+    Logger.error("SSL error: #{inspect(reason)}")
+    {:stop, :shutdown, state}
+  end
+
   def handle_info({:EXIT, _pid, {:shutdown, {:finished, sid}}}, state) do
     GenServer.cast(state.queue, {:ask, 1})
 
