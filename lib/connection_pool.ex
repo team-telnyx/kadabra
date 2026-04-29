@@ -98,6 +98,14 @@ defmodule Kadabra.ConnectionPool do
     {:stop, :shutdown, state}
   end
 
+  # Catch-all for any other Connection exit reason (crash, :normal, etc).
+  # Without this, the ConnectionPool crashes with FunctionClauseError and
+  # the :kadabra supervisor restarts it, creating an orphan pool that the
+  # worker no longer references.
+  def handle_info({:EXIT, _pid, _reason}, state) do
+    {:stop, :shutdown, state}
+  end
+
   def terminate(_reason, _state) do
     :ok
   end
