@@ -106,6 +106,17 @@ defmodule Kadabra.ConnectionPool do
     {:stop, :shutdown, state}
   end
 
+  def terminate(_reason, %{connection: connection}) do
+    # Explicitly stop the connection before the pool terminates.
+    # This ensures the connection's terminate/2 callback runs and
+    # cleans up socket/encoder/decoder processes.
+    if is_pid(connection) and Process.alive?(connection) do
+      Connection.close(connection)
+    end
+
+    :ok
+  end
+
   def terminate(_reason, _state) do
     :ok
   end

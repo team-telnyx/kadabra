@@ -32,6 +32,10 @@ defmodule Kadabra.Socket do
     GenServer.start_link(__MODULE__, {uri, opts})
   end
 
+  def stop(pid) do
+    GenServer.stop(pid, :shutdown)
+  end
+
   def init({uri, opts}) do
     case connect(uri, opts) do
       {:ok, socket} ->

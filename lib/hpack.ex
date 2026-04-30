@@ -7,6 +7,10 @@ defmodule Kadabra.Hpack do
     GenServer.start_link(__MODULE__, :ok)
   end
 
+  def stop(pid) do
+    GenServer.stop(pid, :shutdown)
+  end
+
   def encode(pid, headers) do
     GenServer.call(pid, {:encode, headers})
   end

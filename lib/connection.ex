@@ -176,6 +176,13 @@ defmodule Kadabra.Connection do
 
   def terminate(_reason, %{config: config}) do
     Kernel.send(config.client, {:closed, config.queue})
+
+    # Explicitly stop linked processes to prevent orphaned sockets
+    # when the connection is shut down by its supervisor.
+    if is_pid(config.socket), do: Socket.stop(config.socket)
+    if is_pid(config.encoder), do: Hpack.stop(config.encoder)
+    if is_pid(config.decoder), do: Hpack.stop(config.decoder)
+
     :ok
   end
 end
