@@ -80,8 +80,10 @@ defmodule Kadabra.Socket do
     |> :ssl.connect(uri.port, ssl_opts)
   end
 
+  # Public for testing only; not part of the supported API.
+  @doc false
   @spec options(Keyword.t(), :http | :https) :: [...]
-  defp options(opts, :https) do
+  def options(opts, :https) do
     opts ++
       [
         {:active, :once},
@@ -90,12 +92,17 @@ defmodule Kadabra.Socket do
         {:verify, :verify_peer},
         {:depth, 99},
         {:cacerts, :certifi.cacerts()},
+        # RFC 6125 hostname verification. Without the :https match fun, OTP's
+        # default matcher does not accept wildcard SANs (e.g. *.googleapis.com),
+        # so verify_peer rejects such certs with {:bad_cert, :hostname_check_failed}.
+        {:customize_hostname_check,
+         [match_fun: :public_key.pkix_verify_hostname_match_fun(:https)]},
         {:alpn_advertised_protocols, [<<"h2">>]},
         :binary
       ]
   end
 
-  defp options(opts, :http) do
+  def options(opts, :http) do
     opts ++
       [
         {:active, :once},
