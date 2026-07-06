@@ -90,6 +90,11 @@ defmodule Kadabra.Socket do
         {:verify, :verify_peer},
         {:depth, 99},
         {:cacerts, :certifi.cacerts()},
+        # RFC 6125 hostname verification. Without the :https match fun, OTP's
+        # default matcher does not accept wildcard SANs (e.g. *.googleapis.com),
+        # so verify_peer rejects such certs with {:bad_cert, :hostname_check_failed}.
+        {:customize_hostname_check,
+         [match_fun: :public_key.pkix_verify_hostname_match_fun(:https)]},
         {:alpn_advertised_protocols, [<<"h2">>]},
         :binary
       ]
