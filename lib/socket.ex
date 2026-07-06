@@ -80,8 +80,10 @@ defmodule Kadabra.Socket do
     |> :ssl.connect(uri.port, ssl_opts)
   end
 
+  # Public for testing only; not part of the supported API.
+  @doc false
   @spec options(Keyword.t(), :http | :https) :: [...]
-  defp options(opts, :https) do
+  def options(opts, :https) do
     opts ++
       [
         {:active, :once},
@@ -100,7 +102,7 @@ defmodule Kadabra.Socket do
       ]
   end
 
-  defp options(opts, :http) do
+  def options(opts, :http) do
     opts ++
       [
         {:active, :once},
