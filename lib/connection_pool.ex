@@ -56,9 +56,22 @@ defmodule Kadabra.ConnectionPool do
 
     Process.flag(:trap_exit, true)
 
-    {:ok, connection} = Connection.start_link(config)
-    {:ok, %__MODULE__{connection: connection}}
+    case Connection.start_link(config) do
+      {:ok, connection} ->
+        {:ok, %__MODULE__{connection: connection}}
+
+      {:error, reason} ->
+        # Connection could not establish its socket (e.g. an expired client
+        # certificate). Stop with a shutdown reason so `start_child` returns a
+        # clean {:error, _} to the caller and this transient pool is not restarted
+        # by the :kadabra supervisor on an unrecoverable connect failure.
+        # Connection already reports `{:shutdown, real_reason}`; don't double-wrap.
+        {:stop, normalize_shutdown(reason)}
+    end
   end
+
+  defp normalize_shutdown({:shutdown, _} = reason), do: reason
+  defp normalize_shutdown(reason), do: {:shutdown, reason}
 
   def handle_cast({:ask, demand}, state) do
     state =

@@ -27,4 +27,19 @@ defmodule Kadabra.ConnectionTest do
     assert_receive {:closed, ^pid}, 5_000
     assert_receive {:DOWN, ^ref, :process, ^pid, :shutdown}, 5_000
   end
+
+  test "a socket start failure preserves the real connect reason (no MatchError)" do
+    Process.flag(:trap_exit, true)
+
+    # `bad scheme` makes Kadabra.Socket.connect/2 return {:error, :bad_scheme},
+    # standing in for the incident's {:error, {:tls_alert, {:certificate_expired, _}}}.
+    config = %Kadabra.Config{
+      uri: URI.parse("ftp://example.com"),
+      opts: [],
+      client: self(),
+      queue: self()
+    }
+
+    assert {:error, {:shutdown, :bad_scheme}} = Kadabra.Connection.start_link(config)
+  end
 end

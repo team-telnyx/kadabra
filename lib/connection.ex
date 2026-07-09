@@ -39,22 +39,38 @@ defmodule Kadabra.Connection do
   end
 
   def init(%Config{} = config) do
-    {:ok, encoder} = Hpack.start_link()
-    {:ok, decoder} = Hpack.start_link()
-    {:ok, socket} = Socket.start_link(config.uri, config.opts)
-
-    config =
-      config
-      |> Map.put(:encoder, encoder)
-      |> Map.put(:decoder, decoder)
-      |> Map.put(:socket, socket)
-
-    state = initial_state(config)
-
-    Kernel.send(self(), :start)
+    # Trap exits before starting linked helpers. Otherwise, on the socket error
+    # path below, `Hpack.stop/1` sends a linked `:shutdown` exit that kills this
+    # process before we can return the real connect reason, so the caller would
+    # see `{:error, :shutdown}` instead of e.g. `{:shutdown, {:tls_alert, ...}}`.
     Process.flag(:trap_exit, true)
 
-    {:ok, state}
+    {:ok, encoder} = Hpack.start_link()
+    {:ok, decoder} = Hpack.start_link()
+
+    case Socket.start_link(config.uri, config.opts) do
+      {:ok, socket} ->
+        config =
+          config
+          |> Map.put(:encoder, encoder)
+          |> Map.put(:decoder, decoder)
+          |> Map.put(:socket, socket)
+
+        state = initial_state(config)
+
+        Kernel.send(self(), :start)
+
+        {:ok, state}
+
+      {:error, reason} ->
+        # The TLS socket could not be established -- e.g. an expired client
+        # certificate rejected by the server with a fatal `certificate_expired`
+        # alert. Stop cleanly, preserving the real connect reason, so the caller
+        # receives `{:error, {:shutdown, reason}}` instead of a MatchError crash.
+        Hpack.stop(encoder)
+        Hpack.stop(decoder)
+        {:stop, {:shutdown, reason}}
+    end
   end
 
   defp initial_state(%Config{opts: opts, queue: queue} = config) do
