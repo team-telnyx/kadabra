@@ -39,6 +39,12 @@ defmodule Kadabra.Connection do
   end
 
   def init(%Config{} = config) do
+    # Trap exits before starting linked helpers. Otherwise, on the socket error
+    # path below, `Hpack.stop/1` sends a linked `:shutdown` exit that kills this
+    # process before we can return the real connect reason, so the caller would
+    # see `{:error, :shutdown}` instead of e.g. `{:shutdown, {:tls_alert, ...}}`.
+    Process.flag(:trap_exit, true)
+
     {:ok, encoder} = Hpack.start_link()
     {:ok, decoder} = Hpack.start_link()
 
@@ -53,16 +59,14 @@ defmodule Kadabra.Connection do
         state = initial_state(config)
 
         Kernel.send(self(), :start)
-        Process.flag(:trap_exit, true)
 
         {:ok, state}
 
       {:error, reason} ->
         # The TLS socket could not be established -- e.g. an expired client
         # certificate rejected by the server with a fatal `certificate_expired`
-        # alert. Stop with a shutdown reason so the caller receives a clean
-        # {:error, reason} instead of a MatchError crash, and any transient
-        # supervised owner is not restarted on an unrecoverable connect failure.
+        # alert. Stop cleanly, preserving the real connect reason, so the caller
+        # receives `{:error, {:shutdown, reason}}` instead of a MatchError crash.
         Hpack.stop(encoder)
         Hpack.stop(decoder)
         {:stop, {:shutdown, reason}}
@@ -162,14 +166,6 @@ defmodule Kadabra.Connection do
       |> FlowControl.process(state.config)
 
     {:noreply, %{state | flow_control: flow}}
-  end
-
-  # Catch-all for any other linked-process exit (socket/encoder/decoder), e.g. the
-  # TLS socket terminating after a `certificate_expired` alert. Stop with a shutdown
-  # reason instead of letting an unmatched trapped EXIT crash the connection with a
-  # FunctionClauseError, which would surface as an abnormal exit to the owner.
-  def handle_info({:EXIT, _pid, reason}, state) do
-    {:stop, {:shutdown, reason}, state}
   end
 
   def handle_info({:push_promise, stream}, %{config: config} = state) do

@@ -65,9 +65,13 @@ defmodule Kadabra.ConnectionPool do
         # certificate). Stop with a shutdown reason so `start_child` returns a
         # clean {:error, _} to the caller and this transient pool is not restarted
         # by the :kadabra supervisor on an unrecoverable connect failure.
-        {:stop, {:shutdown, reason}}
+        # Connection already reports `{:shutdown, real_reason}`; don't double-wrap.
+        {:stop, normalize_shutdown(reason)}
     end
   end
+
+  defp normalize_shutdown({:shutdown, _} = reason), do: reason
+  defp normalize_shutdown(reason), do: {:shutdown, reason}
 
   def handle_cast({:ask, demand}, state) do
     state =

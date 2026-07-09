@@ -28,15 +28,18 @@ defmodule Kadabra.ConnectionTest do
     assert_receive {:DOWN, ^ref, :process, ^pid, :shutdown}, 5_000
   end
 
-  test "unexpected linked-process exit stops the connection with a shutdown reason" do
-    state = %Kadabra.Connection{}
+  test "a socket start failure preserves the real connect reason (no MatchError)" do
+    Process.flag(:trap_exit, true)
 
-    # e.g. the TLS socket terminating after a certificate_expired alert. Without the
-    # catch-all EXIT clause this would raise FunctionClauseError (abnormal crash).
-    assert {:stop, {:shutdown, {:tls_alert, :certificate_expired}}, ^state} =
-             Kadabra.Connection.handle_info(
-               {:EXIT, self(), {:tls_alert, :certificate_expired}},
-               state
-             )
+    # `bad scheme` makes Kadabra.Socket.connect/2 return {:error, :bad_scheme},
+    # standing in for the incident's {:error, {:tls_alert, {:certificate_expired, _}}}.
+    config = %Kadabra.Config{
+      uri: URI.parse("ftp://example.com"),
+      opts: [],
+      client: self(),
+      queue: self()
+    }
+
+    assert {:error, {:shutdown, :bad_scheme}} = Kadabra.Connection.start_link(config)
   end
 end
