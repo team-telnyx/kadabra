@@ -41,20 +41,32 @@ defmodule Kadabra.Connection do
   def init(%Config{} = config) do
     {:ok, encoder} = Hpack.start_link()
     {:ok, decoder} = Hpack.start_link()
-    {:ok, socket} = Socket.start_link(config.uri, config.opts)
 
-    config =
-      config
-      |> Map.put(:encoder, encoder)
-      |> Map.put(:decoder, decoder)
-      |> Map.put(:socket, socket)
+    case Socket.start_link(config.uri, config.opts) do
+      {:ok, socket} ->
+        config =
+          config
+          |> Map.put(:encoder, encoder)
+          |> Map.put(:decoder, decoder)
+          |> Map.put(:socket, socket)
 
-    state = initial_state(config)
+        state = initial_state(config)
 
-    Kernel.send(self(), :start)
-    Process.flag(:trap_exit, true)
+        Kernel.send(self(), :start)
+        Process.flag(:trap_exit, true)
 
-    {:ok, state}
+        {:ok, state}
+
+      {:error, reason} ->
+        # The TLS socket could not be established -- e.g. an expired client
+        # certificate rejected by the server with a fatal `certificate_expired`
+        # alert. Stop with a shutdown reason so the caller receives a clean
+        # {:error, reason} instead of a MatchError crash, and any transient
+        # supervised owner is not restarted on an unrecoverable connect failure.
+        Hpack.stop(encoder)
+        Hpack.stop(decoder)
+        {:stop, {:shutdown, reason}}
+    end
   end
 
   defp initial_state(%Config{opts: opts, queue: queue} = config) do
@@ -150,6 +162,14 @@ defmodule Kadabra.Connection do
       |> FlowControl.process(state.config)
 
     {:noreply, %{state | flow_control: flow}}
+  end
+
+  # Catch-all for any other linked-process exit (socket/encoder/decoder), e.g. the
+  # TLS socket terminating after a `certificate_expired` alert. Stop with a shutdown
+  # reason instead of letting an unmatched trapped EXIT crash the connection with a
+  # FunctionClauseError, which would surface as an abnormal exit to the owner.
+  def handle_info({:EXIT, _pid, reason}, state) do
+    {:stop, {:shutdown, reason}, state}
   end
 
   def handle_info({:push_promise, stream}, %{config: config} = state) do
