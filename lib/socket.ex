@@ -42,8 +42,11 @@ defmodule Kadabra.Socket do
         socket_send(socket, connection_preface())
         {:ok, %__MODULE__{socket: socket}}
 
-      error ->
-        error
+      {:error, reason} ->
+        # Return the connect error as the stop reason so `start_link/2` yields
+        # `{:error, reason}` (e.g. `{:error, :timeout}`) instead of
+        # `{:error, {:bad_return_value, {:error, reason}}}`.
+        {:stop, reason}
     end
   end
 
@@ -64,7 +67,7 @@ defmodule Kadabra.Socket do
 
     uri.host
     |> to_charlist()
-    |> :gen_tcp.connect(uri.port, tcp_opts)
+    |> :gen_tcp.connect(uri.port, tcp_opts, connect_timeout(opts))
   end
 
   defp do_connect(uri, :https, opts) do
@@ -77,7 +80,18 @@ defmodule Kadabra.Socket do
 
     uri.host
     |> to_charlist()
-    |> :ssl.connect(uri.port, ssl_opts)
+    |> :ssl.connect(uri.port, ssl_opts, connect_timeout(opts))
+  end
+
+  # Public for testing only; not part of the supported API.
+  @doc false
+  @spec connect_timeout(Keyword.t()) :: timeout()
+  def connect_timeout(opts) do
+    case Keyword.get(opts, :connect_timeout, :infinity) do
+      :infinity -> :infinity
+      ms when is_integer(ms) and ms >= 0 -> ms
+      other -> raise ArgumentError, "invalid :connect_timeout #{inspect(other)}"
+    end
   end
 
   # Public for testing only; not part of the supported API.
