@@ -115,16 +115,26 @@ defmodule KadabraTest do
     test "https://http2.codedge.dev/file/eclipse.jpg", context do
       Kadabra.get(context[:conn], "/file/eclipse.jpg")
 
+      response = await_end_stream(45_000)
+      assert response.id == 1
+      assert response.status == 200
+      assert byte_size(response.body) == 9_026_709
+    end
+
+    # The server sends PING frames during long downloads; Kadabra forwards
+    # them to the client as {:ping, pid}. Skip those and wait for the stream.
+    defp await_end_stream(timeout) do
       receive do
         {:end_stream, response} ->
-          assert response.id == 1
-          assert response.status == 200
-          assert byte_size(response.body) == 9_026_709
+          response
+
+        {:ping, _pid} ->
+          await_end_stream(timeout)
 
         other ->
           flunk("Unexpected response: #{inspect(other)}")
       after
-        45_000 ->
+        timeout ->
           flunk("No stream response received.")
       end
     end
