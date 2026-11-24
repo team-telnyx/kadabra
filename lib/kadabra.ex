@@ -67,14 +67,18 @@ defmodule Kadabra do
   @typedoc ~S"""
   Options for connections.
 
-  - `:ssl` - Specify custom options for `:ssl.connect/3`
+  - `:ssl` - Specify custom options for `:ssl.connect/4`
     when used with `:https` scheme.
-  - `:tcp` - Specify custom options for `:gen_tcp.connect/3`
+  - `:tcp` - Specify custom options for `:gen_tcp.connect/4`
     when used with `:http` scheme.
+  - `:connect_timeout` - Milliseconds to wait for the TCP connect and, for
+    `:https`, the TLS handshake. Defaults to `:infinity`, which leaves the
+    kernel's SYN retry schedule (~127 s on Linux) as the only bound.
   """
   @type conn_opts :: [
           ssl: [...],
-          tcp: [...]
+          tcp: [...],
+          connect_timeout: timeout()
         ]
 
   @typedoc ~S"""

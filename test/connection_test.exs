@@ -40,6 +40,7 @@ defmodule Kadabra.ConnectionTest do
       queue: self()
     }
 
-    assert {:error, {:shutdown, :bad_scheme}} = Kadabra.Connection.start_link(config)
+    assert {:error, {:shutdown, :bad_scheme}} =
+             Kadabra.Connection.start_link(config)
   end
 end
